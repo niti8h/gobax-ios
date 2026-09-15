@@ -26,7 +26,8 @@ interface AuthContextType {
   register: (type: 'mobile' | 'email', value: string, password: string, inviteCode?: string) => Promise<void>;
   requestPasswordReset: (account: string) => Promise<void>;
   deleteAccount: () => Promise<void>;
-  completeSecurityCheck: () => void;
+  completeSecurityCheck: () => Promise<void>;
+  cancelSecurityCheck: () => void;
   logout: () => void;
   updateGobxPoints: (points: number) => void;
 }
@@ -41,14 +42,24 @@ interface StoredSession {
   user: UserProfile;
 }
 
+type SecurityCheckAction = 'login' | 'register' | 'restore' | null;
+
 const getResponseMessage = (payload: unknown, fallback: string) => {
-  if (typeof payload === 'string' && payload.trim()) return payload.trim();
   if (payload && typeof payload === 'object') {
     const data = payload as Record<string, unknown>;
     const message = data.message ?? data.msg ?? data.error ?? data.info;
     if (typeof message === 'string' && message.trim()) return message.trim();
   }
   return fallback;
+};
+
+const getHttpErrorMessage = (status: number) => {
+  if (status === 401) return 'Your user ID or password is incorrect.';
+  if (status === 403 || status === 404 || status >= 500) {
+    return 'The login service is temporarily unavailable. Please try again later.';
+  }
+  if (status === 429) return 'Too many attempts. Please wait a moment and try again.';
+  return 'Unable to complete your request. Please try again.';
 };
 
 const postForm = async (endpoint: string, values: Record<string, string>) => {
@@ -70,12 +81,16 @@ const postForm = async (endpoint: string, values: Record<string, string>) => {
     throw new Error('Network connection was lost. Check your internet connection and try again.');
   }
 
-  const text = await response.text();
-  let payload: unknown = text;
+  const responseText = await response.text();
+  const isJson = response.headers.get('content-type')?.includes('application/json');
+  let payload: unknown = null;
 
-  try {
-    payload = JSON.parse(text);
-  } catch {
+  if (isJson && responseText) {
+    try {
+      payload = JSON.parse(responseText);
+    } catch {
+      // Authentication responses must be JSON. Do not render raw server HTML.
+    }
   }
 
   const data = payload && typeof payload === 'object'
@@ -85,7 +100,15 @@ const postForm = async (endpoint: string, values: Record<string, string>) => {
     typeof data?.code === 'number' && data.code !== 1
   ) || data?.success === false || data?.status === false || data?.error;
   if (!response.ok || explicitlyFailed) {
-    throw new Error(getResponseMessage(payload, 'The server rejected the request.'));
+    throw new Error(
+      getResponseMessage(payload, response.ok
+        ? 'Unable to complete your request. Please try again.'
+        : getHttpErrorMessage(response.status))
+    );
+  }
+
+  if (!isJson || !data) {
+    throw new Error('The login service returned an invalid response. Please try again later.');
   }
 
   return payload;
@@ -121,6 +144,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<UserProfile | null>(null);
   const [securityCheckAccount, setSecurityCheckAccount] = useState('');
   const [securityCheckPassword, setSecurityCheckPassword] = useState('');
+  const [securityCheckAction, setSecurityCheckAction] = useState<SecurityCheckAction>(null);
+  const [pendingRegistration, setPendingRegistration] = useState<{
+    type: 'mobile' | 'email';
+    inviteCode?: string;
+  } | null>(null);
 
   useEffect(() => {
     const restoreSession = async () => {
@@ -132,6 +160,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setUser(session.user);
             setSecurityCheckAccount(session.account);
             setSecurityCheckPassword(session.password);
+            setSecurityCheckAction('restore');
             setIsSecurityCheckVisible(true);
           }
         }
@@ -153,51 +182,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const login = async (identifier: string, password: string) => {
-    const response = await postForm('api_check_login', {
-      account: identifier.trim(),
-      password,
-    });
-    const isEmail = identifier.includes('@');
-    const profile: UserProfile = {
-      id: getUserId(response, identifier.trim()),
-      name: getProfileText(response, 'name') ?? identifier.split('@')[0] ?? 'Member',
-      email: getProfileText(response, 'email') ?? (isEmail ? identifier.trim() : undefined),
-      phone: getProfileText(response, 'phone') ?? (!isEmail ? identifier.trim() : undefined),
-      gobxPoints: getProfileNumber(response, 'gobxPoints'),
-      learningStreak: getProfileNumber(response, 'learningStreak'),
-      quizzesCompleted: getProfileNumber(response, 'quizzesCompleted'),
-      articlesRead: getProfileNumber(response, 'articlesRead'),
-    };
-    setUser(profile);
-    await persistSession(identifier.trim(), password, profile);
     setSecurityCheckAccount(identifier.trim());
     setSecurityCheckPassword(password);
+    setSecurityCheckAction('login');
+    setPendingRegistration(null);
     setIsSecurityCheckVisible(true);
   };
 
   const register = async (type: 'mobile' | 'email', value: string, password: string, inviteCode?: string) => {
-    const values: Record<string, string> = {
-      account: value.trim(),
-      password,
-    };
-    if (inviteCode?.trim()) {
-      values.invit = inviteCode.trim();
-    }
-    const response = await postForm('api_register', values);
-    const profile: UserProfile = {
-      id: getUserId(response, value.trim()),
-      name: getProfileText(response, 'name') ?? (type === 'email' ? value.split('@')[0] : 'Member'),
-      email: getProfileText(response, 'email') ?? (type === 'email' ? value.trim() : undefined),
-      phone: getProfileText(response, 'phone') ?? (type === 'mobile' ? value.trim() : undefined),
-      gobxPoints: getProfileNumber(response, 'gobxPoints'),
-      learningStreak: getProfileNumber(response, 'learningStreak'),
-      quizzesCompleted: getProfileNumber(response, 'quizzesCompleted'),
-      articlesRead: getProfileNumber(response, 'articlesRead'),
-    };
-    setUser(profile);
-    await persistSession(value.trim(), password, profile);
     setSecurityCheckAccount(value.trim());
     setSecurityCheckPassword(password);
+    setSecurityCheckAction('register');
+    setPendingRegistration({ type, inviteCode: inviteCode?.trim() || undefined });
     setIsSecurityCheckVisible(true);
   };
 
@@ -219,9 +215,74 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const completeSecurityCheck = () => {
+  const completeSecurityCheck = async () => {
+    if (securityCheckAction === 'restore') {
+      setSecurityCheckAction(null);
+      setIsSecurityCheckVisible(false);
+      setIsAuthenticated(true);
+      return;
+    }
+
+    if (!securityCheckAccount || !securityCheckPassword || !securityCheckAction) {
+      throw new Error('Security verification expired. Please return to login and try again.');
+    }
+
+    let response: unknown;
+    let profile: UserProfile;
+
+    if (securityCheckAction === 'login') {
+      response = await postForm('api_check_login', {
+        account: securityCheckAccount,
+        password: securityCheckPassword,
+      });
+      const isEmail = securityCheckAccount.includes('@');
+      profile = {
+        id: getUserId(response, securityCheckAccount),
+        name: getProfileText(response, 'name') ?? securityCheckAccount.split('@')[0] ?? 'Member',
+        email: getProfileText(response, 'email') ?? (isEmail ? securityCheckAccount : undefined),
+        phone: getProfileText(response, 'phone') ?? (!isEmail ? securityCheckAccount : undefined),
+        gobxPoints: getProfileNumber(response, 'gobxPoints'),
+        learningStreak: getProfileNumber(response, 'learningStreak'),
+        quizzesCompleted: getProfileNumber(response, 'quizzesCompleted'),
+        articlesRead: getProfileNumber(response, 'articlesRead'),
+      };
+    } else {
+      const registration = pendingRegistration;
+      if (!registration) {
+        throw new Error('Registration details expired. Please return to registration and try again.');
+      }
+      const values: Record<string, string> = {
+        account: securityCheckAccount,
+        password: securityCheckPassword,
+      };
+      if (registration.inviteCode) values.invit = registration.inviteCode;
+      response = await postForm('api_register', values);
+      profile = {
+        id: getUserId(response, securityCheckAccount),
+        name: getProfileText(response, 'name') ?? (registration.type === 'email' ? securityCheckAccount.split('@')[0] : 'Member'),
+        email: getProfileText(response, 'email') ?? (registration.type === 'email' ? securityCheckAccount : undefined),
+        phone: getProfileText(response, 'phone') ?? (registration.type === 'mobile' ? securityCheckAccount : undefined),
+        gobxPoints: getProfileNumber(response, 'gobxPoints'),
+        learningStreak: getProfileNumber(response, 'learningStreak'),
+        quizzesCompleted: getProfileNumber(response, 'quizzesCompleted'),
+        articlesRead: getProfileNumber(response, 'articlesRead'),
+      };
+    }
+
+    setUser(profile);
+    await persistSession(securityCheckAccount, securityCheckPassword, profile);
+    setPendingRegistration(null);
+    setSecurityCheckAction(null);
     setIsSecurityCheckVisible(false);
     setIsAuthenticated(true);
+  };
+
+  const cancelSecurityCheck = () => {
+    setSecurityCheckAccount('');
+    setSecurityCheckPassword('');
+    setSecurityCheckAction(null);
+    setPendingRegistration(null);
+    setIsSecurityCheckVisible(false);
   };
 
   const logout = () => {
@@ -229,6 +290,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
     setIsAuthenticated(false);
     setIsSecurityCheckVisible(false);
+    setSecurityCheckAction(null);
+    setPendingRegistration(null);
     setSecurityCheckAccount('');
     setSecurityCheckPassword('');
   };
@@ -251,6 +314,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         requestPasswordReset,
         deleteAccount,
         completeSecurityCheck,
+        cancelSecurityCheck,
         logout,
         updateGobxPoints,
         securityCheckAccount,

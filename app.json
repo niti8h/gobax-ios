@@ -7,11 +7,6 @@
     "icon": "./assets/gobax-app-icon.png",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#030712",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#030712"
-    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.gobax.app",

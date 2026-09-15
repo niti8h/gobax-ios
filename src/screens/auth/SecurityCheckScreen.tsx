@@ -2,14 +2,11 @@ import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { md5 } from '../../utils/md5';
 
 const SECURITY_CHECK_URL = 'https://gobax.010111902.workers.dev/security-check';
 // const SECURITY_CHECK_URL = 'https://google.com';
 
 interface SecurityCheckScreenProps {
-  account: string;
-  password: string;
   onSecure: () => void;
 }
 
@@ -36,11 +33,11 @@ const bridgeScript = `
 true;
 `;
 
-export const SecurityCheckScreen: React.FC<SecurityCheckScreenProps> = ({ account, password, onSecure }) => {
+export const SecurityCheckScreen: React.FC<SecurityCheckScreenProps> = ({ onSecure }) => {
   const insets = useSafeAreaInsets();
   const [webViewKey, setWebViewKey] = React.useState(0);
   const [loadError, setLoadError] = React.useState(false);
-  const securityCheckUrl = `${SECURITY_CHECK_URL}?${new URLSearchParams({ account, password: md5(password) }).toString()}`;
+  const securityCheckUrl = SECURITY_CHECK_URL;
 
   const handleMessage = (event: WebViewMessageEvent) => {
     try {
@@ -66,7 +63,7 @@ export const SecurityCheckScreen: React.FC<SecurityCheckScreenProps> = ({ accoun
         key={webViewKey}
         source={{ uri: securityCheckUrl }}
         style={styles.webView}
-        originWhitelist={['*']}
+        originWhitelist={['https://gobax.010111902.workers.dev']}
         onMessage={handleMessage}
         injectedJavaScriptBeforeContentLoaded={bridgeScript}
         javaScriptEnabled

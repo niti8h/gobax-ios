@@ -5,9 +5,9 @@
   "dependencies": {
     "@expo/metro-runtime": "~57.0.15",
     "@expo/vector-icons": "^15.0.2",
-    "expo": "~57.0.21",
-    "expo-font": "~57.0.3",
-    "expo-linear-gradient": "~57.0.1",
+    "expo": "~57.0.22",
+    "expo-font": "~57.0.4",
+    "expo-linear-gradient": "~57.0.2",
     "expo-secure-store": "~57.0.4",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",

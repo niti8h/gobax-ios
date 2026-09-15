@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, SafeAreaView } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -12,21 +12,20 @@ import { HomeScreen } from './src/screens/main/HomeScreen';
 import { ArticlesScreen } from './src/screens/main/ArticlesScreen';
 import { QuizScreen } from './src/screens/main/QuizScreen';
 import { SettingsScreen } from './src/screens/main/SettingsScreen';
-import { SecurityCheckScreen } from './src/screens/auth/SecurityCheckScreen';
+import { SecurityCheckGate } from './src/screens/auth/SecurityCheckGate';
 
 const MainAppContent: React.FC = () => {
   const {
     isAuthenticated,
     isRestoringSession,
     isSecurityCheckVisible,
-    securityCheckAccount,
-    securityCheckPassword,
     completeSecurityCheck,
+    cancelSecurityCheck,
   } = useAuth();
 
   // Detect web query param for previewing screens
   const getInitialState = () => {
-    if (typeof window !== 'undefined' && window.location && window.location.search) {
+    if (__DEV__ && typeof window !== 'undefined' && window.location && window.location.search) {
       const params = new URLSearchParams(window.location.search);
       const screenParam = params.get('screen');
       if (screenParam === 'register') return { mode: 'register', authed: false, tab: 'home' as TabKey };
@@ -49,10 +48,9 @@ const MainAppContent: React.FC = () => {
 
   if (isSecurityCheckVisible) {
     return (
-      <SecurityCheckScreen
-        account={securityCheckAccount}
-        password={securityCheckPassword}
+      <SecurityCheckGate
         onSecure={completeSecurityCheck}
+        onBack={cancelSecurityCheck}
       />
     );
   }
