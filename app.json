@@ -31,6 +31,12 @@
     "plugins": [
       "expo-font",
       "expo-secure-store"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "47032f4b-bef9-4fc8-b44c-03388046df6a"
+      }
+    },
+    "owner": "jamoldev"
   }
 }
