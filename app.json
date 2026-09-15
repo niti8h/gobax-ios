@@ -4,7 +4,7 @@
     "slug": "gobax",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/gobax-app-icon.png",
+    "icon": "./assets/gobax-app-icon-square.png",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#030712",
     "ios": {
