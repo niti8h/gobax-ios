@@ -1,0 +1,14 @@
+{
+  "name": "Gobax",
+  "version": "1.0",
+  "primaryCategory": "Education",
+  "ageRatingOverride": "18+",
+  "description": "GoBAX is a cryptocurrency education app for learning blockchain, Web3, DeFi, and digital asset security. Explore educational lessons, browse curated cryptocurrency news, learn common terminology, and test your knowledge with interactive quizzes. GoBAX is informational only and does not provide trading, wallet custody, deposits, withdrawals, or financial advice.",
+  "keywords": "Gobax,crypto,education,blockchain,Web3,DeFi,security,quiz,glossary,news",
+  "supportUrl": "https://gobax.099909.workers.dev/support",
+  "privacyPolicyUrl": "https://gobax.099909.workers.dev/privacy",
+  "copyright": "2026 GoBAX",
+  "releaseType": "AFTER_APPROVAL",
+  "gameCenterEnabled": false,
+  "reviewNotes": "GoBAX is a cryptocurrency education and informational application. It does not provide cryptocurrency trading, wallet custody, deposits, withdrawals, or financial advice.\n\nPlease use the provided demo account to access the app. Enter the four-digit verification code displayed on the login screen.\n\nThe app includes educational articles, a Web3 glossary, security guidance and interactive quizzes."
+}
