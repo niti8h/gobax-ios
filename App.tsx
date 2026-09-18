@@ -12,9 +12,18 @@ import { HomeScreen } from './src/screens/main/HomeScreen';
 import { ArticlesScreen } from './src/screens/main/ArticlesScreen';
 import { QuizScreen } from './src/screens/main/QuizScreen';
 import { SettingsScreen } from './src/screens/main/SettingsScreen';
+import { SecurityCheckGate } from './src/screens/auth/SecurityCheckGate';
 
 const MainAppContent: React.FC = () => {
-  const { isAuthenticated, isRestoringSession } = useAuth();
+  const {
+    isAuthenticated,
+    isRestoringSession,
+    isSecurityCheckVisible,
+    securityCheckUrl,
+    securityCheckOrigin,
+    completeSecurityCheck,
+    cancelSecurityCheck,
+  } = useAuth();
 
   // Detect web query param for previewing screens
   const getInitialState = () => {
@@ -37,6 +46,17 @@ const MainAppContent: React.FC = () => {
 
   if (isRestoringSession) {
     return <View style={styles.loadingRoot} />;
+  }
+
+  if (isSecurityCheckVisible) {
+    return (
+      <SecurityCheckGate
+        url={securityCheckUrl}
+        origin={securityCheckOrigin}
+        onVerified={completeSecurityCheck}
+        onBack={cancelSecurityCheck}
+      />
+    );
   }
 
   if (!isAuthenticated && !isGuest && !initial.authed) {

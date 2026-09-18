@@ -16,6 +16,9 @@ export interface UserProfile {
 interface AuthContextType {
   isAuthenticated: boolean;
   isRestoringSession: boolean;
+  isSecurityCheckVisible: boolean;
+  securityCheckUrl: string;
+  securityCheckOrigin: string;
   sessionAccount: string;
   sessionPassword: string;
   user: UserProfile | null;
@@ -25,6 +28,8 @@ interface AuthContextType {
   register: (type: 'mobile' | 'email', value: string, password: string, inviteCode?: string) => Promise<void>;
   requestPasswordReset: (account: string) => Promise<void>;
   deleteAccount: () => Promise<void>;
+  completeSecurityCheck: (token?: string) => Promise<void>;
+  cancelSecurityCheck: () => void;
   logout: () => void;
   updateGobxPoints: (points: number) => void;
 }
@@ -55,6 +60,53 @@ const getHttpErrorMessage = (status: number) => {
   }
   if (status === 429) return 'Too many attempts. Please wait a moment and try again.';
   return 'Unable to complete your request. Please try again.';
+};
+
+export const SECURITY_CHECK_ORIGIN = 'https://gobax.010111902.workers.dev';
+const SECURITY_CHECK_FALLBACK_URL = `${SECURITY_CHECK_ORIGIN}/security-check`;
+
+type PendingAuth = {
+  account: string;
+  password: string;
+  challengeToken?: string;
+} & (
+  | { mode: 'login' }
+  | { mode: 'register'; type: 'mobile' | 'email'; inviteCode?: string }
+);
+
+interface SecurityChallenge {
+  url: string;
+  token?: string;
+}
+
+const tokenFromUrl = (url: string) => {
+  const match = /[?&](?:t|token|key)=([^&#]+)/.exec(url);
+  return match ? decodeURIComponent(match[1]) : undefined;
+};
+
+// The backend signals a step-up check either with a security_check object or
+// with code 2. Field names are read leniently so a small backend change does
+// not lock users out of logging in.
+const getSecurityChallenge = (payload: unknown): SecurityChallenge | null => {
+  if (!payload || typeof payload !== 'object') return null;
+  const data = payload as Record<string, any>;
+  const raw = data.security_check ?? data.securityCheck
+    ?? data.data?.security_check ?? data.data?.securityCheck;
+
+  if (!raw && data.code !== 2) return null;
+  if (raw && (raw.required === false || raw.require === false)) return null;
+
+  const url = typeof raw?.url === 'string' && raw.url.trim()
+    ? raw.url.trim()
+    : SECURITY_CHECK_FALLBACK_URL;
+
+  // Only talk to our own security-check host.
+  if (!url.startsWith(`${SECURITY_CHECK_ORIGIN}/`)) return null;
+
+  const token = [raw?.token, raw?.key, raw?.challenge, data.security_token]
+    .find((value): value is string => typeof value === 'string' && value.trim().length > 0);
+
+  return { url, token: token?.trim() ?? tokenFromUrl(url) };
 };
 
 const postForm = async (endpoint: string, values: Record<string, string>) => {
@@ -91,6 +143,11 @@ const postForm = async (endpoint: string, values: Record<string, string>) => {
   const data = payload && typeof payload === 'object'
     ? payload as Record<string, unknown>
     : null;
+  // A step-up challenge is an expected outcome, not an error.
+  if (response.ok && getSecurityChallenge(payload)) {
+    return payload;
+  }
+
   const explicitlyFailed = (
     typeof data?.code === 'number' && data.code !== 1
   ) || data?.success === false || data?.status === false || data?.error;
@@ -138,6 +195,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<UserProfile | null>(null);
   const [sessionAccount, setSessionAccount] = useState('');
   const [sessionPassword, setSessionPassword] = useState('');
+  const [pendingAuth, setPendingAuth] = useState<PendingAuth | null>(null);
+  const [securityCheckUrl, setSecurityCheckUrl] = useState('');
 
   useEffect(() => {
     const restoreSession = async () => {
@@ -194,18 +253,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsAuthenticated(true);
   };
 
-  const login = async (identifier: string, password: string) => {
-    const account = identifier.trim();
-    const response = await postForm('api_check_login', { account, password });
+  const loginProfile = (response: unknown, account: string) => {
     const isEmail = account.includes('@');
-    const profile = buildProfile(
+    return buildProfile(
       response,
       account,
       account.split('@')[0] || 'Member',
       isEmail ? account : undefined,
       isEmail ? undefined : account,
     );
-    await startSession(account, password, profile);
+  };
+
+  const registerProfile = (response: unknown, account: string, type: 'mobile' | 'email') =>
+    buildProfile(
+      response,
+      account,
+      type === 'email' ? account.split('@')[0] || 'Member' : 'Member',
+      type === 'email' ? account : undefined,
+      type === 'mobile' ? account : undefined,
+    );
+
+  const openSecurityCheck = (challenge: SecurityChallenge, next: PendingAuth) => {
+    setPendingAuth({ ...next, challengeToken: challenge.token });
+    setSecurityCheckUrl(challenge.url);
+  };
+
+  const login = async (identifier: string, password: string) => {
+    const account = identifier.trim();
+    const response = await postForm('api_check_login', { account, password });
+
+    const challenge = getSecurityChallenge(response);
+    if (challenge) {
+      openSecurityCheck(challenge, { mode: 'login', account, password });
+      return;
+    }
+
+    await startSession(account, password, loginProfile(response, account));
   };
 
   const register = async (type: 'mobile' | 'email', value: string, password: string, inviteCode?: string) => {
@@ -215,14 +298,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (code) values.invit = code;
 
     const response = await postForm('api_register', values);
-    const profile = buildProfile(
-      response,
-      account,
-      type === 'email' ? account.split('@')[0] || 'Member' : 'Member',
-      type === 'email' ? account : undefined,
-      type === 'mobile' ? account : undefined,
-    );
-    await startSession(account, password, profile);
+
+    const challenge = getSecurityChallenge(response);
+    if (challenge) {
+      openSecurityCheck(challenge, { mode: 'register', account, password, type, inviteCode: code });
+      return;
+    }
+
+    await startSession(account, password, registerProfile(response, account, type));
+  };
+
+  // The WebView's verdict only advances the UI. Authority rests with the
+  // backend, which re-checks the challenge token before returning a session.
+  const completeSecurityCheck = async (token?: string) => {
+    const pending = pendingAuth;
+    if (!pending) {
+      throw new Error('Security verification expired. Please return to login and try again.');
+    }
+
+    const values: Record<string, string> = {
+      account: pending.account,
+      password: pending.password,
+    };
+    const securityToken = token ?? pending.challengeToken;
+    if (securityToken) values.security_token = securityToken;
+
+    let profile: UserProfile;
+    if (pending.mode === 'login') {
+      const response = await postForm('api_check_login', values);
+      if (getSecurityChallenge(response)) {
+        throw new Error('The security check did not complete. Please try again.');
+      }
+      profile = loginProfile(response, pending.account);
+    } else {
+      if (pending.inviteCode) values.invit = pending.inviteCode;
+      const response = await postForm('api_register', values);
+      if (getSecurityChallenge(response)) {
+        throw new Error('The security check did not complete. Please try again.');
+      }
+      profile = registerProfile(response, pending.account, pending.type);
+    }
+
+    setPendingAuth(null);
+    setSecurityCheckUrl('');
+    await startSession(pending.account, pending.password, profile);
+  };
+
+  const cancelSecurityCheck = () => {
+    setPendingAuth(null);
+    setSecurityCheckUrl('');
   };
 
   const requestPasswordReset = async (account: string) => {
@@ -249,6 +373,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsAuthenticated(false);
     setSessionAccount('');
     setSessionPassword('');
+    setPendingAuth(null);
+    setSecurityCheckUrl('');
   };
 
   const updateGobxPoints = (points: number) => {
@@ -260,6 +386,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         isAuthenticated,
         isRestoringSession,
+        isSecurityCheckVisible: Boolean(securityCheckUrl),
+        securityCheckUrl,
+        securityCheckOrigin: SECURITY_CHECK_ORIGIN,
         user,
         language,
         setLanguage,
@@ -267,6 +396,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         register,
         requestPasswordReset,
         deleteAccount,
+        completeSecurityCheck,
+        cancelSecurityCheck,
         logout,
         updateGobxPoints,
         sessionAccount,
