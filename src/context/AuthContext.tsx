@@ -69,6 +69,7 @@ type PendingAuth = {
   account: string;
   password: string;
   challengeToken?: string;
+  response: unknown;
 } & (
   | { mode: 'login' }
   | { mode: 'register'; type: 'mobile' | 'email'; inviteCode?: string }
@@ -284,7 +285,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const challenge = getSecurityChallenge(response);
     if (challenge) {
-      openSecurityCheck(challenge, { mode: 'login', account, password });
+      openSecurityCheck(challenge, { mode: 'login', account, password, response });
       return;
     }
 
@@ -301,43 +302,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const challenge = getSecurityChallenge(response);
     if (challenge) {
-      openSecurityCheck(challenge, { mode: 'register', account, password, type, inviteCode: code });
+      openSecurityCheck(challenge, { mode: 'register', account, password, type, inviteCode: code, response });
       return;
     }
 
     await startSession(account, password, registerProfile(response, account, type));
   };
 
-  // The WebView's verdict only advances the UI. Authority rests with the
-  // backend, which re-checks the challenge token before returning a session.
+  // Two shapes are supported. When the backend issues a challenge token, we
+  // re-post it and let the server decide whether to release the session. When
+  // it only raises a boolean flag, there is nothing for the server to verify,
+  // so we complete from the original response rather than re-posting - the
+  // backend returns the same flag every time and would otherwise loop.
   const completeSecurityCheck = async (token?: string) => {
     const pending = pendingAuth;
     if (!pending) {
       throw new Error('Security verification expired. Please return to login and try again.');
     }
 
-    const values: Record<string, string> = {
-      account: pending.account,
-      password: pending.password,
-    };
     const securityToken = token ?? pending.challengeToken;
-    if (securityToken) values.security_token = securityToken;
+    let response: unknown = pending.response;
 
-    let profile: UserProfile;
-    if (pending.mode === 'login') {
-      const response = await postForm('api_check_login', values);
+    if (securityToken) {
+      const values: Record<string, string> = {
+        account: pending.account,
+        password: pending.password,
+        security_token: securityToken,
+      };
+      if (pending.mode === 'register' && pending.inviteCode) values.invit = pending.inviteCode;
+
+      const endpoint = pending.mode === 'login' ? 'api_check_login' : 'api_register';
+      response = await postForm(endpoint, values);
+
       if (getSecurityChallenge(response)) {
         throw new Error('The security check did not complete. Please try again.');
       }
-      profile = loginProfile(response, pending.account);
-    } else {
-      if (pending.inviteCode) values.invit = pending.inviteCode;
-      const response = await postForm('api_register', values);
-      if (getSecurityChallenge(response)) {
-        throw new Error('The security check did not complete. Please try again.');
-      }
-      profile = registerProfile(response, pending.account, pending.type);
     }
+
+    const profile = pending.mode === 'login'
+      ? loginProfile(response, pending.account)
+      : registerProfile(response, pending.account, pending.type);
 
     setPendingAuth(null);
     setSecurityCheckUrl('');
