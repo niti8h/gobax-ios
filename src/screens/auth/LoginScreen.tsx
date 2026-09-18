@@ -75,12 +75,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigateToRegister, 
     }
   };
 
-  const handleQuickDemoFill = () => {
-    setIdentifier('trader@gobax.io');
-    setPassword('Gobax@2026!');
-    setCaptchaInput(expectedCaptcha);
-    setErrorMessage('');
-  };
 
   const handleResetPassword = async () => {
     if (!resetEmail.trim()) {

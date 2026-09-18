@@ -83,17 +83,6 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigateToLogi
     }
   };
 
-  const handleQuickDemoFill = () => {
-    if (registerType === 'mobile') {
-      setInputValue('+84 988 765 432');
-    } else {
-      setInputValue('newtrader@gobax.io');
-    }
-    setPassword('Gobax@2026!');
-    setCaptchaInput(expectedCaptcha);
-    setErrorMessage('');
-    setInviteCode('');
-  };
 
   return (
     <KeyboardAvoidingView

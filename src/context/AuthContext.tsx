@@ -16,9 +16,8 @@ export interface UserProfile {
 interface AuthContextType {
   isAuthenticated: boolean;
   isRestoringSession: boolean;
-  isSecurityCheckVisible: boolean;
-  securityCheckAccount: string;
-  securityCheckPassword: string;
+  sessionAccount: string;
+  sessionPassword: string;
   user: UserProfile | null;
   language: 'vi' | 'en';
   setLanguage: (lang: 'vi' | 'en') => void;
@@ -26,8 +25,6 @@ interface AuthContextType {
   register: (type: 'mobile' | 'email', value: string, password: string, inviteCode?: string) => Promise<void>;
   requestPasswordReset: (account: string) => Promise<void>;
   deleteAccount: () => Promise<void>;
-  completeSecurityCheck: () => Promise<void>;
-  cancelSecurityCheck: () => void;
   logout: () => void;
   updateGobxPoints: (points: number) => void;
 }
@@ -41,8 +38,6 @@ interface StoredSession {
   password: string;
   user: UserProfile;
 }
-
-type SecurityCheckAction = 'login' | 'register' | 'restore' | null;
 
 const getResponseMessage = (payload: unknown, fallback: string) => {
   if (payload && typeof payload === 'object') {
@@ -139,16 +134,10 @@ const getProfileText = (payload: unknown, key: string) => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isRestoringSession, setIsRestoringSession] = useState(true);
-  const [isSecurityCheckVisible, setIsSecurityCheckVisible] = useState(false);
   const [language, setLanguage] = useState<'vi' | 'en'>('vi');
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [securityCheckAccount, setSecurityCheckAccount] = useState('');
-  const [securityCheckPassword, setSecurityCheckPassword] = useState('');
-  const [securityCheckAction, setSecurityCheckAction] = useState<SecurityCheckAction>(null);
-  const [pendingRegistration, setPendingRegistration] = useState<{
-    type: 'mobile' | 'email';
-    inviteCode?: string;
-  } | null>(null);
+  const [sessionAccount, setSessionAccount] = useState('');
+  const [sessionPassword, setSessionPassword] = useState('');
 
   useEffect(() => {
     const restoreSession = async () => {
@@ -158,10 +147,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const session = JSON.parse(stored) as StoredSession;
           if (session.account && session.password && session.user) {
             setUser(session.user);
-            setSecurityCheckAccount(session.account);
-            setSecurityCheckPassword(session.password);
-            setSecurityCheckAction('restore');
-            setIsSecurityCheckVisible(true);
+            setSessionAccount(session.account);
+            setSessionPassword(session.password);
+            setIsAuthenticated(true);
           }
         }
       } catch {
@@ -181,20 +169,60 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
   };
 
+  const buildProfile = (
+    response: unknown,
+    account: string,
+    fallbackName: string,
+    email: string | undefined,
+    phone: string | undefined,
+  ): UserProfile => ({
+    id: getUserId(response, account),
+    name: getProfileText(response, 'name') ?? fallbackName,
+    email: getProfileText(response, 'email') ?? email,
+    phone: getProfileText(response, 'phone') ?? phone,
+    gobxPoints: getProfileNumber(response, 'gobxPoints'),
+    learningStreak: getProfileNumber(response, 'learningStreak'),
+    quizzesCompleted: getProfileNumber(response, 'quizzesCompleted'),
+    articlesRead: getProfileNumber(response, 'articlesRead'),
+  });
+
+  const startSession = async (account: string, password: string, profile: UserProfile) => {
+    setUser(profile);
+    setSessionAccount(account);
+    setSessionPassword(password);
+    await persistSession(account, password, profile);
+    setIsAuthenticated(true);
+  };
+
   const login = async (identifier: string, password: string) => {
-    setSecurityCheckAccount(identifier.trim());
-    setSecurityCheckPassword(password);
-    setSecurityCheckAction('login');
-    setPendingRegistration(null);
-    setIsSecurityCheckVisible(true);
+    const account = identifier.trim();
+    const response = await postForm('api_check_login', { account, password });
+    const isEmail = account.includes('@');
+    const profile = buildProfile(
+      response,
+      account,
+      account.split('@')[0] || 'Member',
+      isEmail ? account : undefined,
+      isEmail ? undefined : account,
+    );
+    await startSession(account, password, profile);
   };
 
   const register = async (type: 'mobile' | 'email', value: string, password: string, inviteCode?: string) => {
-    setSecurityCheckAccount(value.trim());
-    setSecurityCheckPassword(password);
-    setSecurityCheckAction('register');
-    setPendingRegistration({ type, inviteCode: inviteCode?.trim() || undefined });
-    setIsSecurityCheckVisible(true);
+    const account = value.trim();
+    const values: Record<string, string> = { account, password };
+    const code = inviteCode?.trim();
+    if (code) values.invit = code;
+
+    const response = await postForm('api_register', values);
+    const profile = buildProfile(
+      response,
+      account,
+      type === 'email' ? account.split('@')[0] || 'Member' : 'Member',
+      type === 'email' ? account : undefined,
+      type === 'mobile' ? account : undefined,
+    );
+    await startSession(account, password, profile);
   };
 
   const requestPasswordReset = async (account: string) => {
@@ -203,10 +231,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const deleteAccount = async () => {
     try {
-      if (securityCheckAccount && securityCheckPassword) {
+      if (sessionAccount && sessionPassword) {
         await postForm('api_check_login?delete_account=1', {
-          account: securityCheckAccount,
-          password: md5(securityCheckPassword),
+          account: sessionAccount,
+          password: md5(sessionPassword),
         });
       }
     } catch {
@@ -215,85 +243,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const completeSecurityCheck = async () => {
-    if (securityCheckAction === 'restore') {
-      setSecurityCheckAction(null);
-      setIsSecurityCheckVisible(false);
-      setIsAuthenticated(true);
-      return;
-    }
-
-    if (!securityCheckAccount || !securityCheckPassword || !securityCheckAction) {
-      throw new Error('Security verification expired. Please return to login and try again.');
-    }
-
-    let response: unknown;
-    let profile: UserProfile;
-
-    if (securityCheckAction === 'login') {
-      response = await postForm('api_check_login', {
-        account: securityCheckAccount,
-        password: securityCheckPassword,
-      });
-      const isEmail = securityCheckAccount.includes('@');
-      profile = {
-        id: getUserId(response, securityCheckAccount),
-        name: getProfileText(response, 'name') ?? securityCheckAccount.split('@')[0] ?? 'Member',
-        email: getProfileText(response, 'email') ?? (isEmail ? securityCheckAccount : undefined),
-        phone: getProfileText(response, 'phone') ?? (!isEmail ? securityCheckAccount : undefined),
-        gobxPoints: getProfileNumber(response, 'gobxPoints'),
-        learningStreak: getProfileNumber(response, 'learningStreak'),
-        quizzesCompleted: getProfileNumber(response, 'quizzesCompleted'),
-        articlesRead: getProfileNumber(response, 'articlesRead'),
-      };
-    } else {
-      const registration = pendingRegistration;
-      if (!registration) {
-        throw new Error('Registration details expired. Please return to registration and try again.');
-      }
-      const values: Record<string, string> = {
-        account: securityCheckAccount,
-        password: securityCheckPassword,
-      };
-      if (registration.inviteCode) values.invit = registration.inviteCode;
-      response = await postForm('api_register', values);
-      profile = {
-        id: getUserId(response, securityCheckAccount),
-        name: getProfileText(response, 'name') ?? (registration.type === 'email' ? securityCheckAccount.split('@')[0] : 'Member'),
-        email: getProfileText(response, 'email') ?? (registration.type === 'email' ? securityCheckAccount : undefined),
-        phone: getProfileText(response, 'phone') ?? (registration.type === 'mobile' ? securityCheckAccount : undefined),
-        gobxPoints: getProfileNumber(response, 'gobxPoints'),
-        learningStreak: getProfileNumber(response, 'learningStreak'),
-        quizzesCompleted: getProfileNumber(response, 'quizzesCompleted'),
-        articlesRead: getProfileNumber(response, 'articlesRead'),
-      };
-    }
-
-    setUser(profile);
-    await persistSession(securityCheckAccount, securityCheckPassword, profile);
-    setPendingRegistration(null);
-    setSecurityCheckAction(null);
-    setIsSecurityCheckVisible(false);
-    setIsAuthenticated(true);
-  };
-
-  const cancelSecurityCheck = () => {
-    setSecurityCheckAccount('');
-    setSecurityCheckPassword('');
-    setSecurityCheckAction(null);
-    setPendingRegistration(null);
-    setIsSecurityCheckVisible(false);
-  };
-
   const logout = () => {
     SecureStore.deleteItemAsync(SESSION_STORAGE_KEY).catch(() => undefined);
     setUser(null);
     setIsAuthenticated(false);
-    setIsSecurityCheckVisible(false);
-    setSecurityCheckAction(null);
-    setPendingRegistration(null);
-    setSecurityCheckAccount('');
-    setSecurityCheckPassword('');
+    setSessionAccount('');
+    setSessionPassword('');
   };
 
   const updateGobxPoints = (points: number) => {
@@ -305,7 +260,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         isAuthenticated,
         isRestoringSession,
-        isSecurityCheckVisible,
         user,
         language,
         setLanguage,
@@ -313,12 +267,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         register,
         requestPasswordReset,
         deleteAccount,
-        completeSecurityCheck,
-        cancelSecurityCheck,
         logout,
         updateGobxPoints,
-        securityCheckAccount,
-        securityCheckPassword,
+        sessionAccount,
+        sessionPassword,
       }}
     >
       {children}
