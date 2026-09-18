@@ -49,7 +49,20 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ isGuest = false,
           text: language === 'vi' ? 'Xóa tài khoản' : 'Delete Account',
           style: 'destructive',
           onPress: async () => {
-            await deleteAccount();
+            try {
+              await deleteAccount();
+            } catch (error) {
+              Alert.alert(
+                language === 'vi' ? 'Không thể xóa tài khoản' : 'Could not delete account',
+                error instanceof Error
+                  ? error.message
+                  : language === 'vi'
+                    ? 'Vui lòng thử lại sau.'
+                    : 'Please try again later.',
+              );
+              return;
+            }
+
             Alert.alert(
               language === 'vi' ? 'Đã nhận yêu cầu' : 'Request received',
               language === 'vi'

@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import * as SecureStore from 'expo-secure-store';
-import { md5 } from '../utils/md5';
 
 export interface UserProfile {
   id: string;
@@ -357,18 +356,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await postForm('api_check_login?reset_password=1', { account: account.trim() });
   };
 
+  // Deletion must use the same password form as login. Sending md5 here made
+  // the backend answer "wrong password", and the old catch-all then logged the
+  // user out anyway, so the app reported success for a deletion that never
+  // happened. Failures now surface instead.
   const deleteAccount = async () => {
-    try {
-      if (sessionAccount && sessionPassword) {
-        await postForm('api_check_login?delete_account=1', {
-          account: sessionAccount,
-          password: md5(sessionPassword),
-        });
-      }
-    } catch {
-    } finally {
-      logout();
+    if (!sessionAccount || !sessionPassword) {
+      throw new Error('Please sign in again before deleting your account.');
     }
+
+    await postForm('api_check_login?delete_account=1', {
+      account: sessionAccount,
+      password: sessionPassword,
+    });
+
+    logout();
   };
 
   const logout = () => {
