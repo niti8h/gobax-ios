@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Security Check</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center;
+    justify-content: center; background: #030712; color: #E5E7EB;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    padding: 24px;
+  }
+  .box { text-align: center; max-width: 340px; width: 100%; }
+  .loader {
+    width: 42px; height: 42px; border: 4px solid #1F2937; border-top-color: #00D06C;
+    border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 20px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #status { font-size: 16px; line-height: 1.5; }
+  #detail { font-size: 13px; color: #9CA3AF; margin-top: 10px; min-height: 18px; }
+  .ok { color: #22C55E; } .bad { color: #F87171; }
+  button {
+    margin-top: 22px; background: #00D06C; color: #fff; border: 0; border-radius: 10px;
+    padding: 13px 26px; font-size: 15px; font-weight: 700; cursor: pointer;
+  }
+  button[hidden] { display: none; }
+</style>
+</head>
+<body>
+
+<div class="box">
+  <div class="loader" id="loader"></div>
+  <div id="status">Verifying your device…</div>
+  <div id="detail"></div>
+  <button id="retry" hidden>Try again</button>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // The endpoint that decides. This page never decides by itself - it collects
+  // signals, sends them, and reports back whatever the server concluded.
+  var VERIFY_ENDPOINT = '/Login/api_security_verify';
+
+  var statusEl = document.getElementById('status');
+  var detailEl = document.getElementById('detail');
+  var loaderEl = document.getElementById('loader');
+  var retryEl  = document.getElementById('retry');
+
+  function param(name) {
+    var m = new RegExp('[?&]' + name + '=([^&#]*)').exec(window.location.search);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+
+  // Token issued by the backend with the login response. Carried straight back
+  // so the server can tie this verification to that specific login attempt.
+  var token = param('t') || param('token') || param('key');
+
+  function report(status, reason) {
+    var payload = { type: 'SECURITY_CHECK', status: status, token: token };
+    if (reason) payload.reason = reason;
+
+    // React Native WebView bridge.
+    if (window.ReactNativeWebView) {
+      try { window.ReactNativeWebView.postMessage(JSON.stringify(payload)); } catch (e) {}
+    }
+    // Browser / iframe host.
+    if (window.parent && window.parent !== window) {
+      try { window.parent.postMessage(payload, '*'); } catch (e) {}
+    }
+    try {
+      window.dispatchEvent(new CustomEvent('securityCheckComplete', {
+        detail: { secure: status === 'secure', token: token, reason: reason }
+      }));
+    } catch (e) {}
+  }
+
+  // Real, observable properties of this client. None of these are proof on
+  // their own - scoring them is the server's job.
+  function collectSignals() {
+    var nav = window.navigator || {};
+    var scr = window.screen || {};
+    var signals = {
+      userAgent: nav.userAgent || '',
+      language: nav.language || '',
+      languages: (nav.languages || []).join(','),
+      platform: nav.platform || '',
+      hardwareConcurrency: nav.hardwareConcurrency || 0,
+      deviceMemory: nav.deviceMemory || 0,
+      maxTouchPoints: nav.maxTouchPoints || 0,
+      screen: [scr.width || 0, scr.height || 0, scr.colorDepth || 0].join('x'),
+      pixelRatio: window.devicePixelRatio || 0,
+      timezone: '',
+      timezoneOffset: new Date().getTimezoneOffset(),
+      cookiesEnabled: nav.cookieEnabled === true,
+      // Automation tells.
+      webdriver: nav.webdriver === true,
+      headlessHint: /HeadlessChrome|PhantomJS|Electron/i.test(nav.userAgent || ''),
+      pluginCount: nav.plugins ? nav.plugins.length : 0,
+      touchSupported: 'ontouchstart' in window,
+      webglRenderer: ''
+    };
+
+    try {
+      signals.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    } catch (e) {}
+
+    try {
+      var canvas = document.createElement('canvas');
+      var gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+      if (gl) {
+        var dbg = gl.getExtension('WEBGL_debug_renderer_info');
+        if (dbg) signals.webglRenderer = String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '');
+      }
+    } catch (e) {}
+
+    return signals;
+  }
+
+  function fail(message) {
+    loaderEl.style.display = 'none';
+    statusEl.textContent = 'Verification failed';
+    statusEl.className = 'bad';
+    detailEl.textContent = message || '';
+    retryEl.hidden = false;
+    report('failed', message);
+  }
+
+  function pass() {
+    loaderEl.style.display = 'none';
+    statusEl.textContent = 'Verification complete';
+    statusEl.className = 'ok';
+    detailEl.textContent = '';
+    report('secure');
+  }
+
+  function run() {
+    retryEl.hidden = true;
+    loaderEl.style.display = '';
+    statusEl.className = '';
+    statusEl.textContent = 'Verifying your device…';
+    detailEl.textContent = '';
+
+    var signals = collectSignals();
+
+    var controller = typeof AbortController === 'function' ? new AbortController() : null;
+    var timer = setTimeout(function () { if (controller) controller.abort(); }, 15000);
+
+    fetch(VERIFY_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ token: token, signals: signals }),
+      signal: controller ? controller.signal : undefined
+    })
+      .then(function (response) {
+        clearTimeout(timer);
+        if (!response.ok) throw new Error('Verification service returned ' + response.status);
+        return response.json();
+      })
+      .then(function (result) {
+        // The server's verdict, honoured as given. code 1 / ok / secure all pass.
+        var passed = result && (
+          result.ok === true ||
+          result.secure === true ||
+          result.code === 1 ||
+          result.status === 'secure'
+        );
+        if (passed) pass();
+        else fail((result && (result.reason || result.info || result.message)) || 'This device could not be verified.');
+      })
+      .catch(function (error) {
+        clearTimeout(timer);
+        fail(error && error.name === 'AbortError'
+          ? 'The check timed out. Please check your connection.'
+          : 'Could not reach the verification service.');
+      });
+  }
+
+  retryEl.addEventListener('click', run);
+  run();
+})();
+</script>
+
+</body>
+</html>
