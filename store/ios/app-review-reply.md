@@ -115,15 +115,35 @@ publishers rather than reproducing their articles.
 
 ## Capture checklist for the screen recording
 
-Record on a **physical iPhone** running the current iOS (not the Simulator —
-Apple asks for a real device). Single continuous take, portrait.
+Record on a **physical iPhone** running the current iOS (not the Simulator -
+Apple asks for a real device). Single continuous take, portrait. Install
+**build 5** from TestFlight, not build 2.
 
-1. Start on the Home Screen and **tap the GoBAX icon** — the recording must begin with the launch.
-2. **Register a new account** — tap Register, enter an email and password, type the four-digit code, submit, land in the app.
-3. Visit **each tab**: Home, Articles (open one article), Quiz (answer at least one question and show the points), Settings.
+### Do NOT delete test@test.com on camera
+
+`test@test.com` is the account Apple's reviewer signs in with. Account
+deletion now genuinely deletes, so deleting it during the recording would
+leave the reviewer unable to log in at all - an instant rejection.
+
+Register a throwaway account and delete **that** one instead.
+
+### Order
+
+1. Start on the Home Screen and **tap the GoBAX icon** - the recording must begin with the launch.
+2. **Register a new account**, e.g. `demo18sep@test.com` with any password. Type the four-digit code shown on screen, submit, land in the app.
+3. Visit **each tab**: Home, Articles (open one article), Quiz (answer at least one question, show the points), Settings.
 4. **Log out** from Settings.
-5. **Log back in** with `test@test.com` / `11223344` (show the four-digit code being entered).
-6. Go to **Settings → Delete Account**, confirm the dialog, show the app returning to login.
-7. Optionally show **Continue as guest** from the login screen.
+5. **Log in as `test@test.com` / `11223344`** - show the reviewer's account working. Browse briefly.
+6. **Log out** again.
+7. **Log back in as the throwaway account** from step 2.
+8. **Settings -> Delete Account**, confirm the dialog, show the app returning to login.
+9. **Try logging in with the deleted account** - it should be refused. This is the proof Apple wants that deletion is real.
+10. Optionally show **Continue as guest** from the login screen.
 
-Keep it unhurried — let each screen finish loading. Two to four minutes is fine.
+Keep it unhurried - let each screen finish loading. Three to five minutes is fine.
+
+### Screenshots
+
+While on the device, also capture four screenshots - Home, Articles, Quiz,
+Settings - so the App Store listing uses genuine device captures rather than
+the current web-export renders.
