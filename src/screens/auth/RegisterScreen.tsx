@@ -26,7 +26,7 @@ type TabType = 'mobile' | 'email';
 export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigateToLogin }) => {
   const { register, language } = useAuth();
 
-  const [registerType, setRegisterType] = useState<TabType>('mobile');
+  const [registerType, setRegisterType] = useState<TabType>('email');
   const [inputValue, setInputValue] = useState('');
   const [password, setPassword] = useState('');
   const [captchaInput, setCaptchaInput] = useState('');
@@ -98,29 +98,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigateToLogi
 
         {/* Mobile / E-mail Selector Pills matching screenshot */}
         <View style={styles.pillContainer}>
-          <TouchableOpacity
-            style={[
-              styles.pillButton,
-              registerType === 'mobile' ? styles.pillActive : styles.pillInactive,
-            ]}
-            onPress={() => {
-              setRegisterType('mobile');
-              setInputValue('');
-              setErrorMessage('');
-            }}
-            activeOpacity={0.8}
-          >
-            <Text
-              style={[
-                styles.pillText,
-                registerType === 'mobile'
-                  ? styles.pillTextActive
-                  : styles.pillTextInactive,
-              ]}
-            >
-              Mobile
-            </Text>
-          </TouchableOpacity>
+
 
           <TouchableOpacity
             style={[
@@ -143,6 +121,29 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigateToLogi
               ]}
             >
               E-mail
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.pillButton,
+              registerType === 'mobile' ? styles.pillActive : styles.pillInactive,
+            ]}
+            onPress={() => {
+              setRegisterType('mobile');
+              setInputValue('');
+              setErrorMessage('');
+            }}
+            activeOpacity={0.8}
+          >
+            <Text
+              style={[
+                styles.pillText,
+                registerType === 'mobile'
+                  ? styles.pillTextActive
+                  : styles.pillTextInactive,
+              ]}
+            >
+              Mobile
             </Text>
           </TouchableOpacity>
         </View>
@@ -189,8 +190,8 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigateToLogi
                   ? 'Nhập số điện thoại'
                   : 'Enter phone number'
                 : language === 'vi'
-                ? 'Nhập địa chỉ email'
-                : 'Enter email address'
+                  ? 'Nhập địa chỉ email'
+                  : 'Enter email address'
             }
             placeholderTextColor="#4B5563"
             autoCapitalize="none"
