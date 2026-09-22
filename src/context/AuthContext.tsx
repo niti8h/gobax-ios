@@ -202,14 +202,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const restoreSession = async () => {
       try {
         const stored = await SecureStore.getItemAsync(SESSION_STORAGE_KEY);
-        if (stored) {
-          const session = JSON.parse(stored) as StoredSession;
-          if (session.account && session.password && session.user) {
-            setUser(session.user);
-            setSessionAccount(session.account);
-            setSessionPassword(session.password);
-            setIsAuthenticated(true);
+        if (!stored) return;
+
+        const session = JSON.parse(stored) as StoredSession;
+        if (!session.account || !session.password || !session.user) return;
+
+        setUser(session.user);
+        setSessionAccount(session.account);
+        setSessionPassword(session.password);
+
+        // Re-check with the backend on every launch, so an account the
+        // backend flags meets the security check again rather than walking
+        // straight in on a stored session.
+        try {
+          const response = await postForm('api_check_login', {
+            account: session.account,
+            password: session.password,
+          });
+
+          const challenge = getSecurityChallenge(response);
+          if (challenge) {
+            openSecurityCheck(challenge, {
+              mode: 'login',
+              account: session.account,
+              password: session.password,
+              response,
+            });
+            return;
           }
+
+          setIsAuthenticated(true);
+        } catch {
+          // Offline or the backend is unreachable. Fall back to the stored
+          // session rather than locking someone out of content they already
+          // have; the check runs again on the next launch that has network.
+          setIsAuthenticated(true);
         }
       } catch {
         await SecureStore.deleteItemAsync(SESSION_STORAGE_KEY).catch(() => undefined);
