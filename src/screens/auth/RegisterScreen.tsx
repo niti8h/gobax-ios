@@ -175,7 +175,9 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigateToLogi
               ? language === 'vi'
                 ? 'Điện thoại'
                 : 'Phone'
-              : 'Username'}
+              : language === 'vi'
+                ? 'Tên người dùng'
+                : 'Username'}
           </Text>
           <TextInput
             style={styles.underlineInput}
@@ -190,8 +192,8 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigateToLogi
                   ? 'Nhập số điện thoại'
                   : 'Enter phone number'
                 : language === 'vi'
-                  ? 'Nhập địa chỉ email'
-                  : 'Enter email address'
+                  ? 'Nhập tên người dùng'
+                  : 'Enter username'
             }
             placeholderTextColor="#4B5563"
             autoCapitalize="none"
