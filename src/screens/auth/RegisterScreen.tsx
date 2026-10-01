@@ -120,10 +120,10 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigateToLogi
                   : styles.pillTextInactive,
               ]}
             >
-              E-mail
+              Username
             </Text>
           </TouchableOpacity>
-          <TouchableOpacity
+          {/* <TouchableOpacity
             style={[
               styles.pillButton,
               registerType === 'mobile' ? styles.pillActive : styles.pillInactive,
@@ -145,7 +145,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigateToLogi
             >
               Mobile
             </Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
 
         {/* Quick Demo Autofill */}
@@ -175,7 +175,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigateToLogi
               ? language === 'vi'
                 ? 'Điện thoại'
                 : 'Phone'
-              : 'E-mail'}
+              : 'Username'}
           </Text>
           <TextInput
             style={styles.underlineInput}
