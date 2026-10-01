@@ -21,12 +21,9 @@ interface RegisterScreenProps {
   onNavigateToLogin: () => void;
 }
 
-type TabType = 'mobile' | 'email';
-
 export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigateToLogin }) => {
   const { register, language } = useAuth();
 
-  const [registerType, setRegisterType] = useState<TabType>('email');
   const [inputValue, setInputValue] = useState('');
   const [password, setPassword] = useState('');
   const [captchaInput, setCaptchaInput] = useState('');
@@ -41,17 +38,9 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigateToLogi
     setErrorMessage('');
 
     if (!inputValue.trim()) {
-      if (registerType === 'mobile') {
-        setErrorMessage(
-          language === 'vi'
-            ? 'Vui lòng nhập số điện thoại'
-            : 'Please enter your phone number'
-        );
-      } else {
-        setErrorMessage(
-          language === 'vi' ? 'Vui lòng nhập địa chỉ E-mail' : 'Please enter your E-mail'
-        );
-      }
+      setErrorMessage(
+        language === 'vi' ? 'Vui lòng nhập địa chỉ email' : 'Please enter your email'
+      );
       return;
     }
 
@@ -75,7 +64,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigateToLogi
 
     setLoading(true);
     try {
-      await register(registerType, inputValue, password, inviteCode);
+      await register('email', inputValue.trim(), password, inviteCode);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Unable to register. Please try again.');
     } finally {
@@ -96,57 +85,6 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigateToLogi
       >
         <Header showLangSwitch={true} />
 
-        {/* Mobile / E-mail Selector Pills matching screenshot */}
-        <View style={styles.pillContainer}>
-
-
-          <TouchableOpacity
-            style={[
-              styles.pillButton,
-              registerType === 'email' ? styles.pillActive : styles.pillInactive,
-            ]}
-            onPress={() => {
-              setRegisterType('email');
-              setInputValue('');
-              setErrorMessage('');
-            }}
-            activeOpacity={0.8}
-          >
-            <Text
-              style={[
-                styles.pillText,
-                registerType === 'email'
-                  ? styles.pillTextActive
-                  : styles.pillTextInactive,
-              ]}
-            >
-              Username
-            </Text>
-          </TouchableOpacity>
-          {/* <TouchableOpacity
-            style={[
-              styles.pillButton,
-              registerType === 'mobile' ? styles.pillActive : styles.pillInactive,
-            ]}
-            onPress={() => {
-              setRegisterType('mobile');
-              setInputValue('');
-              setErrorMessage('');
-            }}
-            activeOpacity={0.8}
-          >
-            <Text
-              style={[
-                styles.pillText,
-                registerType === 'mobile'
-                  ? styles.pillTextActive
-                  : styles.pillTextInactive,
-              ]}
-            >
-              Mobile
-            </Text>
-          </TouchableOpacity> */}
-        </View>
 
         {/* Quick Demo Autofill */}
         {/* <TouchableOpacity
@@ -168,16 +106,10 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigateToLogi
           </View>
         ) : null}
 
-        {/* Input 1: Điện thoại / E-mail */}
+        {/* Input 1: Email */}
         <View style={styles.inputGroup}>
           <Text style={styles.label}>
-            {registerType === 'mobile'
-              ? language === 'vi'
-                ? 'Điện thoại'
-                : 'Phone'
-              : language === 'vi'
-                ? 'Tên người dùng'
-                : 'Username'}
+            {language === 'vi' ? 'Địa chỉ email' : 'Email'}
           </Text>
           <TextInput
             style={styles.underlineInput}
@@ -186,20 +118,10 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigateToLogi
               setInputValue(text);
               if (errorMessage) setErrorMessage('');
             }}
-            placeholder={
-              registerType === 'mobile'
-                ? language === 'vi'
-                  ? 'Nhập số điện thoại'
-                  : 'Enter phone number'
-                : language === 'vi'
-                  ? 'Nhập tên người dùng'
-                  : 'Enter username'
-            }
+            placeholder={language === 'vi' ? 'Nhập địa chỉ email' : 'Enter email address'}
             placeholderTextColor="#4B5563"
             autoCapitalize="none"
-            keyboardType={
-              registerType === 'mobile' ? 'phone-pad' : 'email-address'
-            }
+            keyboardType="email-address"
           />
         </View>
 

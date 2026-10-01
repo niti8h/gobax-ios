@@ -43,8 +43,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigateToRegister, 
     if (!identifier.trim()) {
       setErrorMessage(
         language === 'vi'
-          ? 'Vui lòng nhập số điện thoại hoặc Gmail'
-          : 'Please enter phone number or Gmail'
+          ? 'Vui lòng nhập địa chỉ email'
+          : 'Please enter your email'
       );
       return;
     }
@@ -78,7 +78,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigateToRegister, 
 
   const handleResetPassword = async () => {
     if (!resetEmail.trim()) {
-      Alert.alert('Notice', 'Please enter your email or phone.');
+      Alert.alert('Notice', 'Please enter your email.');
       return;
     }
     setLoading(true);
@@ -133,12 +133,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigateToRegister, 
           </View>
         ) : null}
 
-        {/* Input 1: Số điện thoại hoặc địa chỉ Gmail */}
+        {/* Input 1: Email */}
         <View style={styles.inputGroup}>
           <Text style={styles.label}>
-            {language === 'vi'
-              ? 'Mã người dùng'
-              : 'User ID'}
+            {language === 'vi' ? 'Địa chỉ email' : 'Email'}
           </Text>
           <TextInput
             style={styles.underlineInput}
@@ -149,8 +147,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigateToRegister, 
             }}
             placeholder={
               language === 'vi'
-                ? 'Nhập mã người dùng'
-                : 'Enter your user ID'
+                ? 'Nhập địa chỉ email'
+                : 'Enter your email'
             }
             placeholderTextColor="#4B5563"
             autoCapitalize="none"
@@ -263,8 +261,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigateToRegister, 
               </Text>
               <Text style={styles.modalSubtitle}>
                 {language === 'vi'
-                  ? 'Nhập email hoặc số điện thoại để nhận mã khôi phục tài khoản.'
-                  : 'Enter your email or phone to receive a recovery code.'}
+                  ? 'Nhập địa chỉ email để nhận mã khôi phục tài khoản.'
+                  : 'Enter your email to receive a recovery code.'}
               </Text>
 
               {resetSent ? (
@@ -272,7 +270,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigateToRegister, 
                   <Ionicons name="checkmark-circle" size={32} color="#00E676" />
                   <Text style={styles.resetSuccessText}>
                     {language === 'vi'
-                      ? 'Đã gửi hướng dẫn khôi phục qua tin nhắn/email!'
+                      ? 'Đã gửi hướng dẫn khôi phục qua email!'
                       : 'Recovery instructions sent successfully!'}
                   </Text>
                   <TouchableOpacity style={styles.confirmButton} onPress={closeResetModal}>
