@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -13,6 +13,8 @@ import { ArticlesScreen } from './src/screens/main/ArticlesScreen';
 import { QuizScreen } from './src/screens/main/QuizScreen';
 import { SettingsScreen } from './src/screens/main/SettingsScreen';
 import { SecurityCheckGate } from './src/screens/auth/SecurityCheckGate';
+
+type AuthMode = 'login' | 'register' | null;
 
 const MainAppContent: React.FC = () => {
   const {
@@ -30,19 +32,24 @@ const MainAppContent: React.FC = () => {
     if (__DEV__ && typeof window !== 'undefined' && window.location && window.location.search) {
       const params = new URLSearchParams(window.location.search);
       const screenParam = params.get('screen');
-      if (screenParam === 'register') return { mode: 'register', authed: false, tab: 'home' as TabKey };
-      if (screenParam === 'home') return { mode: 'login', authed: true, tab: 'home' as TabKey };
-      if (screenParam === 'articles') return { mode: 'login', authed: true, tab: 'articles' as TabKey };
-      if (screenParam === 'quiz') return { mode: 'login', authed: true, tab: 'quiz' as TabKey };
-      if (screenParam === 'settings') return { mode: 'login', authed: true, tab: 'settings' as TabKey };
+      if (screenParam === 'login') return { mode: 'login' as AuthMode, tab: 'home' as TabKey };
+      if (screenParam === 'register') return { mode: 'register' as AuthMode, tab: 'home' as TabKey };
+      if (screenParam === 'articles') return { mode: null, tab: 'articles' as TabKey };
+      if (screenParam === 'quiz') return { mode: null, tab: 'quiz' as TabKey };
+      if (screenParam === 'settings') return { mode: null, tab: 'settings' as TabKey };
     }
-    return { mode: 'login', authed: false, tab: 'home' as TabKey };
+    return { mode: null, tab: 'home' as TabKey };
   };
 
   const initial = getInitialState();
-  const [authMode, setAuthMode] = useState<'login' | 'register'>(initial.mode as any);
+  // Learning content is open to everyone. The sign-in screens only appear
+  // when someone chooses to sign in (App Review guideline 5.1.1(v)).
+  const [authMode, setAuthMode] = useState<AuthMode>(initial.mode);
   const [activeTab, setActiveTab] = useState<TabKey>(initial.tab);
-  const [isGuest, setIsGuest] = useState(false);
+
+  useEffect(() => {
+    if (isAuthenticated) setAuthMode(null);
+  }, [isAuthenticated]);
 
   if (isRestoringSession) {
     return <View style={styles.loadingRoot} />;
@@ -59,14 +66,14 @@ const MainAppContent: React.FC = () => {
     );
   }
 
-  if (!isAuthenticated && !isGuest && !initial.authed) {
+  if (authMode && !isAuthenticated) {
     return (
       <View style={styles.authRoot}>
         <StarfieldBackground showBorder={true}>
           {authMode === 'login' ? (
             <LoginScreen
               onNavigateToRegister={() => setAuthMode('register')}
-              onContinueAsGuest={() => setIsGuest(true)}
+              onContinueAsGuest={() => setAuthMode(null)}
             />
           ) : (
             <RegisterScreen onNavigateToLogin={() => setAuthMode('login')} />
@@ -85,8 +92,8 @@ const MainAppContent: React.FC = () => {
         {activeTab === 'quiz' && <QuizScreen />}
         {activeTab === 'settings' && (
           <SettingsScreen
-            isGuest={isGuest}
-            onGuestLogout={() => setIsGuest(false)}
+            isGuest={!isAuthenticated}
+            onSignIn={() => setAuthMode('login')}
           />
         )}
       </View>

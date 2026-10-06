@@ -17,10 +17,10 @@ import { COLORS } from '../../theme/colors';
 
 interface SettingsScreenProps {
   isGuest?: boolean;
-  onGuestLogout?: () => void;
+  onSignIn?: () => void;
 }
 
-export const SettingsScreen: React.FC<SettingsScreenProps> = ({ isGuest = false, onGuestLogout }) => {
+export const SettingsScreen: React.FC<SettingsScreenProps> = ({ isGuest = false, onSignIn }) => {
   const insets = useSafeAreaInsets();
   const { user, logout, deleteAccount, language, setLanguage } = useAuth();
 
@@ -30,7 +30,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ isGuest = false,
   const handleConfirmLogout = () => {
     setLogoutModalVisible(false);
     logout();
-    onGuestLogout?.();
   };
 
   const openPolicy = (url: string) => {
@@ -41,8 +40,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ isGuest = false,
     Alert.alert(
       language === 'vi' ? 'Xóa tài khoản?' : 'Delete account?',
       language === 'vi'
-        ? 'Yêu cầu xóa tài khoản sẽ được tiếp nhận. Tài khoản sẽ bị xóa sau 7 ngày nếu bạn không đăng nhập lại.'
-        : 'Your deletion request will be received. Your account will be deleted after 7 days if you do not log in again.',
+        ? 'Tài khoản và dữ liệu của bạn sẽ bị xóa vĩnh viễn. Không thể hoàn tác.'
+        : 'Your account and its data will be permanently deleted. This cannot be undone.',
       [
         { text: language === 'vi' ? 'Hủy' : 'Cancel', style: 'cancel' },
         {
@@ -64,10 +63,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ isGuest = false,
             }
 
             Alert.alert(
-              language === 'vi' ? 'Đã nhận yêu cầu' : 'Request received',
+              language === 'vi' ? 'Đã xóa tài khoản' : 'Account deleted',
               language === 'vi'
-                ? 'Tài khoản của bạn sẽ bị xóa sau 7 ngày nếu bạn không đăng nhập lại.'
-                : 'Your account will be deleted after 7 days if you do not log in again.',
+                ? 'Tài khoản của bạn đã được xóa. Bạn vẫn có thể tiếp tục học với tư cách khách.'
+                : 'Your account has been deleted. You can keep learning as a guest.',
             );
           },
         },
@@ -101,10 +100,26 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ isGuest = false,
             </View>
 
             <View style={styles.profileDetails}>
-              <Text style={styles.userName}>{user?.name || 'Learner'}</Text>
-              <Text style={styles.userEmail}>{user?.email || user?.phone}</Text>
+              <Text style={styles.userName}>
+                {isGuest ? (language === 'vi' ? 'Khách' : 'Guest') : user?.name || 'Learner'}
+              </Text>
+              <Text style={styles.userEmail}>
+                {isGuest
+                  ? language === 'vi'
+                    ? 'Đăng nhập để lưu tiến độ học tập (không bắt buộc)'
+                    : 'Sign in to save your progress (optional)'
+                  : user?.email}
+              </Text>
             </View>
           </View>
+          {isGuest ? (
+            <TouchableOpacity style={styles.signInButton} onPress={onSignIn} activeOpacity={0.8}>
+              <Ionicons name="log-in-outline" size={20} color="#00D06C" />
+              <Text style={styles.signInButtonText}>
+                {language === 'vi' ? 'Đăng nhập hoặc tạo tài khoản' : 'Sign in or create account'}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         {/* Preferences Section */}
@@ -251,16 +266,18 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ isGuest = false,
           </TouchableOpacity>
         )}
 
-        <TouchableOpacity
-          style={styles.logoutButton}
-          onPress={() => setLogoutModalVisible(true)}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="log-out-outline" size={22} color="#EF4444" />
-          <Text style={styles.logoutButtonText}>
-            {language === 'vi' ? 'Đăng xuất' : 'Log Out'}
-          </Text>
-        </TouchableOpacity>
+        {!isGuest && (
+          <TouchableOpacity
+            style={styles.logoutButton}
+            onPress={() => setLogoutModalVisible(true)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="log-out-outline" size={22} color="#EF4444" />
+            <Text style={styles.logoutButtonText}>
+              {language === 'vi' ? 'Đăng xuất' : 'Log Out'}
+            </Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
 
       {/* Logout Confirmation Modal */}
@@ -281,8 +298,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ isGuest = false,
             </Text>
             <Text style={styles.modalSubtitle}>
               {language === 'vi'
-                ? 'Bạn sẽ quay lại màn hình đăng nhập của Gobax. Phiên đăng nhập hiện tại sẽ kết thúc.'
-                : 'You will return to the Gobax login screen. Your current session will end.'}
+                ? 'Bạn sẽ đăng xuất và có thể tiếp tục sử dụng Gobax với tư cách khách.'
+                : 'You will be signed out and can keep using Gobax as a guest.'}
             </Text>
 
             <View style={styles.modalButtons}>
@@ -312,6 +329,18 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ isGuest = false,
 };
 
 const styles = StyleSheet.create({
+  signInButton: {
+    alignItems: 'center',
+    borderColor: 'rgba(0, 208, 108, 0.45)',
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'center',
+    marginTop: 16,
+    paddingVertical: 12,
+  },
+  signInButtonText: { color: '#00D06C', fontSize: 15, fontWeight: '700' },
   container: {
     flex: 1,
     backgroundColor: '#030712',
