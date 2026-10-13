@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { Platform, View, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -17,6 +17,17 @@ import { SignInPrompt } from './src/components/SignInPrompt';
 import * as SecureStore from 'expo-secure-store';
 
 const SIGN_IN_PROMPT_KEY = 'gobax-sign-in-prompt-seen';
+
+const promptStore = {
+  get: async () =>
+    Platform.OS === 'web'
+      ? globalThis.localStorage?.getItem(SIGN_IN_PROMPT_KEY) ?? null
+      : SecureStore.getItemAsync(SIGN_IN_PROMPT_KEY),
+  set: async () =>
+    Platform.OS === 'web'
+      ? globalThis.localStorage?.setItem(SIGN_IN_PROMPT_KEY, '1')
+      : SecureStore.setItemAsync(SIGN_IN_PROMPT_KEY, '1'),
+};
 
 type AuthMode = 'login' | 'register' | null;
 
@@ -59,14 +70,14 @@ const MainAppContent: React.FC = () => {
   // null while loading, so the prompt never flashes for returning users.
   const [promptSeen, setPromptSeen] = useState<boolean | null>(null);
   useEffect(() => {
-    SecureStore.getItemAsync(SIGN_IN_PROMPT_KEY)
+    promptStore.get()
       .then(value => setPromptSeen(value === '1'))
       .catch(() => setPromptSeen(true));
   }, []);
 
   const dismissPrompt = () => {
     setPromptSeen(true);
-    SecureStore.setItemAsync(SIGN_IN_PROMPT_KEY, '1').catch(() => undefined);
+    promptStore.set().catch(() => undefined);
   };
 
   if (isRestoringSession) {

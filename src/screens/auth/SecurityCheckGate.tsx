@@ -41,6 +41,14 @@ export const SecurityCheckGate: React.FC<SecurityCheckGateProps> = ({
   const handleResult = async (result: SecurityCheckResult) => {
     if (settled.current) return;
 
+    // The check page manages its own UI, including any exit. It can send
+    // status "cancel" to leave the check without an error.
+    if (result.status === 'cancel' || result.status === 'cancelled') {
+      settled.current = true;
+      onBack();
+      return;
+    }
+
     if (result.status !== 'secure') {
       fail(result.reason || 'The security check did not pass. Please try again.');
       return;
@@ -56,7 +64,7 @@ export const SecurityCheckGate: React.FC<SecurityCheckGateProps> = ({
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <SecurityCheckFrame
         key={frameKey}
         url={url}
@@ -85,16 +93,6 @@ export const SecurityCheckGate: React.FC<SecurityCheckGateProps> = ({
         </View>
       ) : null}
 
-      {/* No time limit (the check may include a captcha); this exit is always
-          reachable, so nobody can be trapped behind the check. */}
-      {!errorMessage && !completing ? (
-        <TouchableOpacity
-          style={[styles.cancelBar, { paddingBottom: insets.bottom || 12 }]}
-          onPress={onBack}
-        >
-          <Text style={styles.backText}>Cancel and return to login</Text>
-        </TouchableOpacity>
-      ) : null}
     </View>
   );
 };
@@ -126,10 +124,5 @@ const styles = StyleSheet.create({
   },
   retryText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
   backButton: { marginTop: 18, padding: 8 },
-  cancelBar: {
-    alignItems: 'center',
-    backgroundColor: '#030712',
-    paddingTop: 12,
-  },
   backText: { color: '#60A5FA', fontSize: 15, fontWeight: '600' },
 });
