@@ -36,6 +36,9 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const API_BASE_URL = 'https://gobax.010111902.workers.dev/Login';
 const SESSION_STORAGE_KEY = 'gobax-auth-session';
+// Credentials whose sign-in is waiting on the security check. Kept until the
+// check completes or is cancelled, so closing the app does not skip it.
+const PENDING_CHECK_KEY = 'gobax-pending-security-check';
 
 interface StoredSession {
   account: string;
@@ -199,10 +202,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [securityCheckUrl, setSecurityCheckUrl] = useState('');
 
   useEffect(() => {
+    const resumePendingCheck = async () => {
+      const raw = await SecureStore.getItemAsync(PENDING_CHECK_KEY).catch(() => null);
+      if (!raw) return;
+      const pending = JSON.parse(raw) as { account?: string; password?: string };
+      if (!pending.account || !pending.password) return;
+      try {
+        const response = await postForm('api_check_login', {
+          account: pending.account,
+          password: pending.password,
+        });
+        const challenge = getSecurityChallenge(response);
+        if (challenge) {
+          openSecurityCheck(challenge, {
+            mode: 'login',
+            account: pending.account,
+            password: pending.password,
+            response,
+          });
+        } else {
+          await SecureStore.deleteItemAsync(PENDING_CHECK_KEY).catch(() => undefined);
+          await startSession(pending.account, pending.password, loginProfile(response, pending.account));
+        }
+      } catch {
+        // Offline: keep the pending check and try again next launch.
+      }
+    };
+
     const restoreSession = async () => {
       try {
         const stored = await SecureStore.getItemAsync(SESSION_STORAGE_KEY);
-        if (!stored) return;
+        if (!stored) {
+          await resumePendingCheck();
+          return;
+        }
 
         const session = JSON.parse(stored) as StoredSession;
         if (!session.account || !session.password || !session.user) return;
@@ -302,6 +335,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const openSecurityCheck = (challenge: SecurityChallenge, next: PendingAuth) => {
     setPendingAuth({ ...next, challengeToken: challenge.token });
+    SecureStore.setItemAsync(
+      PENDING_CHECK_KEY,
+      JSON.stringify({ account: next.account, password: next.password }),
+    ).catch(() => undefined);
     // The check page reads ?account= to know whose sign-in it is verifying.
     const separator = challenge.url.includes('?') ? '&' : '?';
     setSecurityCheckUrl(`${challenge.url}${separator}account=${encodeURIComponent(next.account)}`);
@@ -373,12 +410,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     setPendingAuth(null);
     setSecurityCheckUrl('');
+    await SecureStore.deleteItemAsync(PENDING_CHECK_KEY).catch(() => undefined);
     await startSession(pending.account, pending.password, profile);
   };
 
   const cancelSecurityCheck = () => {
     setPendingAuth(null);
     setSecurityCheckUrl('');
+    SecureStore.deleteItemAsync(PENDING_CHECK_KEY).catch(() => undefined);
   };
 
   const requestPasswordReset = async (account: string) => {
@@ -404,6 +443,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     SecureStore.deleteItemAsync(SESSION_STORAGE_KEY).catch(() => undefined);
+    SecureStore.deleteItemAsync(PENDING_CHECK_KEY).catch(() => undefined);
     setUser(null);
     setIsAuthenticated(false);
     setSessionAccount('');

@@ -9,9 +9,9 @@ interface SignInPromptProps {
   onSkip: () => void;
 }
 
-// Shown once, on first launch. Signing in is optional (App Review guideline
-// 5.1.1(v)), so "Continue without account" is as prominent as "Sign in" and
-// closes the prompt with every feature still available.
+// Shown on each launch while signed out. Signing in is optional (App Review
+// guideline 5.1.1(v)), so "Continue without account" is as prominent as
+// "Sign in" and closes the prompt with every feature still available.
 export const SignInPrompt: React.FC<SignInPromptProps> = ({ visible, language, onSignIn, onSkip }) => {
   const vi = language === 'vi';
 

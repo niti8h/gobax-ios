@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
+import type { ShouldStartLoadRequest } from 'react-native-webview/lib/WebViewTypes';
 
 export interface SecurityCheckResult {
   status?: string;
@@ -83,11 +84,20 @@ export const SecurityCheckFrame: React.FC<SecurityCheckFrameProps> = ({
     }
   };
 
+  // Everything web loads inside the check, including captcha iframes from other
+  // domains; only non-web links (tel:, mailto:, app schemes) leave the app.
+  const shouldStartLoad = (request: ShouldStartLoadRequest) =>
+    /^(https?:|about:|data:|blob:)/i.test(request.url);
+
   return (
     <WebView
       source={{ uri: url }}
       style={styles.webView}
-      originWhitelist={[origin]}
+      originWhitelist={['*']}
+      onShouldStartLoadWithRequest={shouldStartLoad}
+      setSupportMultipleWindows={false}
+      sharedCookiesEnabled
+      thirdPartyCookiesEnabled
       onMessage={handleMessage}
       injectedJavaScriptBeforeContentLoaded={bridgeScript}
       injectedJavaScript={bridgeScript}
