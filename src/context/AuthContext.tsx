@@ -302,7 +302,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const openSecurityCheck = (challenge: SecurityChallenge, next: PendingAuth) => {
     setPendingAuth({ ...next, challengeToken: challenge.token });
-    setSecurityCheckUrl(challenge.url);
+    // The check page reads ?account= to know whose sign-in it is verifying.
+    const separator = challenge.url.includes('?') ? '&' : '?';
+    setSecurityCheckUrl(`${challenge.url}${separator}account=${encodeURIComponent(next.account)}`);
   };
 
   const login = async (identifier: string, password: string) => {

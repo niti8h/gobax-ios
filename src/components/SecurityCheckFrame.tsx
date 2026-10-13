@@ -17,8 +17,12 @@ interface SecurityCheckFrameProps {
 
 // Relays only security-check payloads. Anything else the page posts is ignored,
 // so an unrelated postMessage can never be mistaken for a verdict.
+// Injected twice - before content loads and after - because on iOS the
+// early hook does not always run. The guard keeps the second run a no-op.
 const bridgeScript = `
   (function () {
+    if (window.__gobaxSecurityBridge) return;
+    window.__gobaxSecurityBridge = true;
     var send = function (payload) {
       if (window.ReactNativeWebView) {
         window.ReactNativeWebView.postMessage(JSON.stringify(payload));
@@ -86,6 +90,7 @@ export const SecurityCheckFrame: React.FC<SecurityCheckFrameProps> = ({
       originWhitelist={[origin]}
       onMessage={handleMessage}
       injectedJavaScriptBeforeContentLoaded={bridgeScript}
+      injectedJavaScript={bridgeScript}
       javaScriptEnabled
       domStorageEnabled
       onError={onError}

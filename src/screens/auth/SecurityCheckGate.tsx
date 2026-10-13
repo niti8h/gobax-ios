@@ -1,12 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SecurityCheckFrame, SecurityCheckResult } from '../../components/SecurityCheckFrame';
 
-// If the page never reaches a verdict we surface an escape hatch rather than
-// leaving anyone — including an App Review tester — stuck on a spinner.
-const VERDICT_TIMEOUT_MS = 45000;
 
 interface SecurityCheckGateProps {
   url: string;
@@ -27,14 +24,6 @@ export const SecurityCheckGate: React.FC<SecurityCheckGateProps> = ({
   const [completing, setCompleting] = useState(false);
   const settled = useRef(false);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (settled.current) return;
-      settled.current = true;
-      setErrorMessage('The security check is taking longer than expected.');
-    }, VERDICT_TIMEOUT_MS);
-    return () => clearTimeout(timer);
-  }, [frameKey]);
 
   const retry = () => {
     settled.current = false;
@@ -96,7 +85,8 @@ export const SecurityCheckGate: React.FC<SecurityCheckGateProps> = ({
         </View>
       ) : null}
 
-      {/* Always reachable, so nobody can be trapped behind the check. */}
+      {/* No time limit (the check may include a captcha); this exit is always
+          reachable, so nobody can be trapped behind the check. */}
       {!errorMessage && !completing ? (
         <TouchableOpacity
           style={[styles.cancelBar, { paddingBottom: insets.bottom || 12 }]}

@@ -13,6 +13,10 @@ import { ArticlesScreen } from './src/screens/main/ArticlesScreen';
 import { QuizScreen } from './src/screens/main/QuizScreen';
 import { SettingsScreen } from './src/screens/main/SettingsScreen';
 import { SecurityCheckGate } from './src/screens/auth/SecurityCheckGate';
+import { SignInPrompt } from './src/components/SignInPrompt';
+import * as SecureStore from 'expo-secure-store';
+
+const SIGN_IN_PROMPT_KEY = 'gobax-sign-in-prompt-seen';
 
 type AuthMode = 'login' | 'register' | null;
 
@@ -25,6 +29,7 @@ const MainAppContent: React.FC = () => {
     securityCheckOrigin,
     completeSecurityCheck,
     cancelSecurityCheck,
+    language,
   } = useAuth();
 
   // Detect web query param for previewing screens
@@ -50,6 +55,19 @@ const MainAppContent: React.FC = () => {
   useEffect(() => {
     if (isAuthenticated) setAuthMode(null);
   }, [isAuthenticated]);
+
+  // null while loading, so the prompt never flashes for returning users.
+  const [promptSeen, setPromptSeen] = useState<boolean | null>(null);
+  useEffect(() => {
+    SecureStore.getItemAsync(SIGN_IN_PROMPT_KEY)
+      .then(value => setPromptSeen(value === '1'))
+      .catch(() => setPromptSeen(true));
+  }, []);
+
+  const dismissPrompt = () => {
+    setPromptSeen(true);
+    SecureStore.setItemAsync(SIGN_IN_PROMPT_KEY, '1').catch(() => undefined);
+  };
 
   if (isRestoringSession) {
     return <View style={styles.loadingRoot} />;
@@ -99,6 +117,16 @@ const MainAppContent: React.FC = () => {
       </View>
 
       <BottomNavBar activeTab={activeTab} onSelectTab={setActiveTab} />
+
+      <SignInPrompt
+        visible={promptSeen === false && !isAuthenticated && activeTab === 'home'}
+        language={language}
+        onSignIn={() => {
+          dismissPrompt();
+          setAuthMode('login');
+        }}
+        onSkip={dismissPrompt}
+      />
     </View>
   );
 };
